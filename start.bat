@@ -1,0 +1,6 @@
+@echo off
+echo Killing any existing bot instances...
+taskkill /IM python.exe /F /T 2>nul
+timeout /t 2 /nobreak >nul
+echo Starting Translator Bot...
+python bot.py
