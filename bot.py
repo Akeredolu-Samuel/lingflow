@@ -229,6 +229,22 @@ async def premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(msg, parse_mode='Markdown')
 
 
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Only allow the designated admin to use this command
+    if str(update.effective_chat.id) != config.get("admin_chat_id"):
+        return
+
+    users_count, groups_count, premium_count = db.get_stats()
+    msg = (
+        "📊 *Bot Statistics* 📊\n\n"
+        f"👤 *Total Users*: {users_count}\n"
+        f"👥 *Total Groups*: {groups_count}\n"
+        f"🌟 *Premium Users*: {premium_count}\n\n"
+        "_(Only visible to you)_"
+    )
+    await update.message.reply_text(msg, parse_mode='Markdown')
+
+
 async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     bal, is_prem, expiry = db.get_user_balance(user_id)
@@ -362,6 +378,7 @@ def main():
     application.add_handler(CommandHandler("setlang", setlang))
     application.add_handler(CommandHandler("premium", premium))
     application.add_handler(CommandHandler("balance", balance))
+    application.add_handler(CommandHandler("stats", stats))
 
     application.add_handler(ChatMemberHandler(greet_new_group, ChatMemberHandler.MY_CHAT_MEMBER))
     application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), translate_message))

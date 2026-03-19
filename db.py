@@ -156,3 +156,13 @@ class Database:
         
         c.execute('UPDATE users SET is_premium = 1, premium_expiry = ? WHERE user_id = ?', (new_expiry_str, user_id))
         self.conn.commit()
+
+    def get_stats(self):
+        c = self.conn.cursor()
+        c.execute('SELECT COUNT(*) FROM users')
+        users_count = c.fetchone()[0]
+        c.execute('SELECT COUNT(*) FROM groups')
+        groups_count = c.fetchone()[0]
+        c.execute('SELECT COUNT(*) FROM users WHERE is_premium = 1')
+        premium_count = c.fetchone()[0]
+        return users_count, groups_count, premium_count
