@@ -1,3 +1,4 @@
+import os
 import json
 import logging
 import re
@@ -19,9 +20,50 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Load config
-with open("config.json", "r") as f:
-    config = json.load(f)
+# Default configuration
+config = {
+    "bot_token": "YOUR_TELEGRAM_BOT_TOKEN_HERE",
+    "admin_chat_id": "",
+    "free_daily_limit": 50,
+    "pricing": {
+        "premium_monthly_usd": 10.0,
+        "pay_per_use_usd": 0.001
+    }
+}
+
+# Load from config.json if it exists
+if os.path.exists("config.json"):
+    try:
+        with open("config.json", "r") as f:
+            user_config = json.load(f)
+            if isinstance(user_config, dict):
+                # Update top-level keys
+                for key in ["bot_token", "admin_chat_id", "free_daily_limit"]:
+                    if key in user_config:
+                        config[key] = user_config[key]
+                # Update pricing if it exists
+                if "pricing" in user_config and isinstance(user_config["pricing"], dict):
+                    for p_key in ["premium_monthly_usd", "pay_per_use_usd"]:
+                        if p_key in user_config["pricing"]:
+                            config["pricing"][p_key] = user_config["pricing"][p_key]
+    except Exception as e:
+        logger.error(f"Error loading config.json: {e}")
+
+# Environment Variables override (for Heroku)
+config["bot_token"] = os.getenv("BOT_TOKEN", config["bot_token"])
+config["admin_chat_id"] = os.getenv("ADMIN_CHAT_ID", config["admin_chat_id"])
+
+env_limit = os.getenv("FREE_DAILY_LIMIT")
+if env_limit:
+    config["free_daily_limit"] = int(env_limit)
+
+env_premium = os.getenv("PREMIUM_MONTHLY_USD")
+if env_premium:
+    config["pricing"]["premium_monthly_usd"] = float(env_premium)
+
+env_pay = os.getenv("PAY_PER_USE_USD")
+if env_pay:
+    config["pricing"]["pay_per_use_usd"] = float(env_pay)
 
 db = Database()
 
