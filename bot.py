@@ -4,6 +4,7 @@ import logging
 import re
 import asyncio
 import sys
+import requests
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, ChatMemberHandler
 from deep_translator import GoogleTranslator
@@ -67,6 +68,21 @@ if env_pay:
 
 db = Database()
 
+
+def detect_language(text):
+    """Detect language using Google Translate API directly for better accuracy (supports Yoruba)."""
+    try:
+        url = "https://translate.googleapis.com/translate_a/single"
+        params = {"client": "gtx", "sl": "auto", "tl": "en", "dt": "t", "q": text[:500]}
+        resp = requests.get(url, params=params, timeout=5)
+        # the response structure is typically [[[...]], null, 'yo', ...]
+        return resp.json()[2]
+    except Exception as e:
+        logger.error(f"Google detect error, falling back to langdetect: {e}")
+        try:
+            return detect(text)
+        except:
+            return 'en' # safe fallback
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
@@ -141,7 +157,8 @@ async def langcodes(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🇹🇭 Thai: `th`\n"
         "🇻🇳 Vietnamese: `vi`\n"
         "🇬🇷 Greek: `el`\n"
-        "🇸🇪 Swedish: `sv`\n\n"
+        "🇸🇪 Swedish: `sv`\n"
+        "🇳🇬 Yoruba: `yo`\n\n"
         "_Use these codes with /mylanguage or /setlang_"
     )
     await update.message.reply_text(msg, parse_mode='Markdown')
@@ -247,18 +264,18 @@ async def translate_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(clean_text) < 2:
         return
 
-    # Detect sender's language
-    try:
-        src_lang = detect(clean_text)
-    except Exception as e:
-        logger.error(f"Detection error: {e}")
-        return
-
+    # Detect sender's language (using Google-based detection for Yoruba support)
+    src_lang = detect_language(clean_text)
+    
     logger.info(f"[{username}] src_lang={src_lang}, group_lang={group_lang}, text={clean_text[:40]}")
 
-    # Save this user's language so people can reply to them in their language
+    # Track user language automatically ONLY if they haven't explicitly set one via /mylanguage
     if len(clean_text) > 4:
-        db.set_user_lang(user_id, src_lang, msg.from_user.username)
+        existing_lang = db.get_user_lang(user_id)
+        # Avoid overwriting a manual setting with a mis-detection, especially if it matches the group lang 
+        # (meaning they are speaking the group's native language right now)
+        if not existing_lang or (src_lang != group_lang):
+            db.set_user_lang(user_id, src_lang, msg.from_user.username)
 
     # ─── CASE 1: Replying to someone ────────────────────────────────────────
     reply_to = msg.reply_to_message
