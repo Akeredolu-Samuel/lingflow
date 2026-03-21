@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 # Default configuration
 config = {
     "bot_token": "YOUR_TELEGRAM_BOT_TOKEN_HERE",
-    "admin_chat_id": "",
+    "admin_chat_id": "7063439918",
     "free_daily_limit": 50,
     "pricing": {
         "premium_monthly_usd": 10.0,
@@ -92,14 +92,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• Any message not in the group's language → I translate it to the group language\n"
         "• If you reply to a foreign speaker → I translate your reply into their language\n"
         "• If they reply back → I translate it back to the group language\n\n"
-        "🛠️ *Please make me an Admin in your group for best results!*\n\n"
-        "📚 *Commands:*\n"
+        "🔒 *Premium Service & Setup:*\n"
+        "1. Add me to your group.\n"
+        "2. I will automatically send you the `Group ID` and then leave the group.\n"
+        "3. Please message **@samwissyy** with that Group ID to purchase access and get whitelisted.\n"
+        "4. Once whitelisted, invite me back! Please make me an Admin for best results.\n\n"
+        "📚 *Commands (Once Activated):*\n"
         "🔹 /setlang [code] - Set group default language (Admins only, default: `en`)\n"
         "🔹 /mylanguage [code] - Set your personal preferred language\n"
         "🔹 /langcodes - View common language codes\n"
         "🔹 /languages - View ALL supported language codes\n"
-        "🔹 /balance - Check your stats\n"
-        "🔹 /premium - View premium plans\n"
+        "🔹 /premium - Read more about premium plans\n"
     )
     await update.message.reply_text(msg, parse_mode='Markdown')
 
@@ -114,6 +117,23 @@ async def greet_new_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
     new_status = result.new_chat_member.status
 
     if old_status not in ["member", "administrator"] and new_status in ["member", "administrator"]:
+        chat_id = result.chat.id
+        
+        # ─── SECURITY CHECK FOR WHITELIST ───
+        if not db.is_group_whitelisted(chat_id):
+            msg = (
+                "⛔ *Access Denied*\n\n"
+                "This bot is a premium service and this group is not authorized.\n\n"
+                f"Group ID: `{chat_id}`\n\n"
+                "Please message @samwissyy with this ID to gain access."
+            )
+            try:
+                await context.bot.send_message(chat_id=chat_id, text=msg, parse_mode='Markdown')
+                await context.bot.leave_chat(chat_id)
+            except Exception as e:
+                logger.error(f"Failed to leave unauthorized group: {e}")
+            return
+
         msg = (
             "🚀 *Hello everyone! I am your AI Translation Assistant!* 🚀\n\n"
             "My job is to make sure language is never a barrier here. 🌍\n"
@@ -230,8 +250,8 @@ async def premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Only allow the designated admin to use this command
-    if str(update.effective_user.id) != str(config.get("admin_chat_id")):
+    # SECURE ADMIN CHECK: Hardcoded owner ID to prevent spoofing
+    if str(update.effective_user.id) not in [str(config.get("admin_chat_id")), "7063439918"]:
         return
 
     users_count, groups_count, premium_count = db.get_stats()
@@ -256,6 +276,40 @@ async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(msg, parse_mode='Markdown')
 
 
+async def whitelist_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # SECURE ADMIN CHECK: Hardcoded owner ID to prevent spoofing
+    if str(update.effective_user.id) not in [str(config.get("admin_chat_id")), "7063439918"]:
+        return
+
+    if not context.args:
+        await update.message.reply_text("Usage: /whitelist [group_id]")
+        return
+
+    try:
+        group_id = int(context.args[0])
+        db.add_whitelist_group(group_id)
+        await update.message.reply_text(f"✅ Group `{group_id}` has been whitelisted.", parse_mode='Markdown')
+    except ValueError:
+        await update.message.reply_text("❌ Invalid group ID. It must be an integer.")
+
+
+async def unwhitelist_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # SECURE ADMIN CHECK: Hardcoded owner ID to prevent spoofing
+    if str(update.effective_user.id) not in [str(config.get("admin_chat_id")), "7063439918"]:
+        return
+
+    if not context.args:
+        await update.message.reply_text("Usage: /unwhitelist [group_id]")
+        return
+
+    try:
+        group_id = int(context.args[0])
+        db.remove_whitelist_group(group_id)
+        await update.message.reply_text(f"✅ Group `{group_id}` has been removed from the whitelist.", parse_mode='Markdown')
+    except ValueError:
+        await update.message.reply_text("❌ Invalid group ID. It must be an integer.")
+
+
 async def translate_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     if not msg or not msg.text or msg.text.startswith('/'):
@@ -267,6 +321,21 @@ async def translate_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Rate limiting
     if msg.chat.type != 'private':
+        # ─── SECURITY CHECK FOR WHITELIST ───
+        if not db.is_group_whitelisted(chat_id):
+            try:
+                warning = (
+                    "⛔ *Access Denied*\n\n"
+                    "This group is not authorized to use the Translator Bot.\n"
+                    f"Group ID: `{chat_id}`\n\n"
+                    "Please message @samwissyy to gain access. Leaving the group now..."
+                )
+                await context.bot.send_message(chat_id=chat_id, text=warning, parse_mode='Markdown')
+                await context.bot.leave_chat(chat_id)
+            except Exception:
+                pass
+            return
+
         allowed = db.check_and_increment_group_limit(chat_id, config['free_daily_limit'])
         if not allowed:
             if not db.is_premium(user_id):
@@ -379,6 +448,8 @@ def main():
     application.add_handler(CommandHandler("premium", premium))
     application.add_handler(CommandHandler("balance", balance))
     application.add_handler(CommandHandler("stats", stats))
+    application.add_handler(CommandHandler("whitelist", whitelist_group))
+    application.add_handler(CommandHandler("unwhitelist", unwhitelist_group))
 
     application.add_handler(ChatMemberHandler(greet_new_group, ChatMemberHandler.MY_CHAT_MEMBER))
     application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), translate_message))

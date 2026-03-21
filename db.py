@@ -29,6 +29,12 @@ class Database:
             translations_today INTEGER DEFAULT 0,
             last_reset TEXT
         )''')
+        
+        # whitelisted groups table
+        c.execute('''CREATE TABLE IF NOT EXISTS whitelisted_groups (
+            group_id INTEGER PRIMARY KEY
+        )''')
+        
         self.conn.commit()
 
     def _get_today_str(self):
@@ -166,3 +172,19 @@ class Database:
         c.execute('SELECT COUNT(*) FROM users WHERE is_premium = 1')
         premium_count = c.fetchone()[0]
         return users_count, groups_count, premium_count
+
+    def add_whitelist_group(self, group_id):
+        c = self.conn.cursor()
+        c.execute('INSERT OR IGNORE INTO whitelisted_groups (group_id) VALUES (?)', (group_id,))
+        self.conn.commit()
+
+    def remove_whitelist_group(self, group_id):
+        c = self.conn.cursor()
+        c.execute('DELETE FROM whitelisted_groups WHERE group_id = ?', (group_id,))
+        self.conn.commit()
+
+    def is_group_whitelisted(self, group_id):
+        c = self.conn.cursor()
+        c.execute('SELECT 1 FROM whitelisted_groups WHERE group_id = ?', (group_id,))
+        res = c.fetchone()
+        return bool(res)
