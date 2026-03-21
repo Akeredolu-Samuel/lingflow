@@ -231,7 +231,7 @@ async def premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Only allow the designated admin to use this command
-    if str(update.effective_chat.id) != config.get("admin_chat_id"):
+    if str(update.effective_user.id) != str(config.get("admin_chat_id")):
         return
 
     users_count, groups_count, premium_count = db.get_stats()
