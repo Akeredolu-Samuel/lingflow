@@ -84,6 +84,30 @@ def detect_language(text):
         except:
             return 'en' # safe fallback
 
+def clean_language_code(lang):
+    """Normalize language codes and fix common typos/aliases."""
+    if not lang:
+        return 'en'
+    lang = lang.lower().strip()
+    
+    aliases = {
+        'ch': 'zh-cn',
+        'zh': 'zh-cn',
+        'cn': 'zh-cn',
+        'chinese': 'zh-cn',
+        'tw': 'zh-tw',
+        'jp': 'ja',
+        'kr': 'ko',
+        'sp': 'es',
+        'por': 'pt',
+        'indo': 'id',
+        'turk': 'tr',
+        'rus': 'ru',
+        'uk': 'en',
+        'us': 'en'
+    }
+    return aliases.get(lang, lang)
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
         "👋 *Welcome to the AI Translator Bot!*\n\n"
@@ -210,7 +234,8 @@ async def mylanguage(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Usage: /mylanguage [language_code]\nExample: /mylanguage es\n\nType /langcodes to see codes."
         )
         return
-    lang = context.args[0].lower()
+    raw_lang = context.args[0]
+    lang = clean_language_code(raw_lang)
     user_id = update.effective_user.id
     username = update.effective_user.username
     db.set_user_lang(user_id, lang, username)
@@ -233,7 +258,8 @@ async def setlang(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Usage: /setlang [language_code]\nExample: /setlang en\n\nType /langcodes to see codes.")
         return
 
-    lang = context.args[0].lower()
+    raw_lang = context.args[0]
+    lang = clean_language_code(raw_lang)
     db.set_group_lang(chat.id, lang)
     await update.message.reply_text(f"✅ The group's default language is now set to: `{lang}`", parse_mode='Markdown')
 
@@ -368,7 +394,7 @@ async def translate_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if not db.deduct_balance(user_id, config['pricing']['pay_per_use_usd']):
                     return
 
-    group_lang = db.get_group_lang(chat_id)
+    group_lang = clean_language_code(db.get_group_lang(chat_id))
     text = msg.text
     clean_text = text.strip()
 
@@ -376,9 +402,10 @@ async def translate_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # Detect sender's language (using Google-based detection for Yoruba support)
-    src_lang = detect_language(clean_text)
+    raw_src_lang = detect_language(clean_text)
+    src_lang = clean_language_code(raw_src_lang)
     
-    logger.info(f"[{username}] src_lang={src_lang}, group_lang={group_lang}, text={clean_text[:40]}")
+    logger.info(f"[{username}] src_lang={src_lang} (raw:{raw_src_lang}), group_lang={group_lang}, text={clean_text[:40]}")
 
     # Track user language automatically ONLY if they haven't explicitly set one via /mylanguage
     if len(clean_text) > 4:
@@ -425,6 +452,8 @@ async def translate_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # If no stored preference found, fall back to group default
         if not target_lang:
             target_lang = group_lang
+
+        target_lang = clean_language_code(target_lang)
 
         # Only translate if there's an actual lang difference
         if src_lang == target_lang:
