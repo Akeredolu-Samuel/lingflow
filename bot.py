@@ -278,7 +278,11 @@ async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def whitelist_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # SECURE ADMIN CHECK: Hardcoded owner ID to prevent spoofing
-    if str(update.effective_user.id) not in [str(config.get("admin_chat_id")), "7063439918"]:
+    user_id = str(update.effective_user.id)
+    allowed_ids = [str(config.get("admin_chat_id")).strip(), "7063439918"]
+    
+    if user_id not in allowed_ids:
+        await update.message.reply_text(f"❌ Unauthorized command. Your ID: {user_id}")
         return
 
     if not context.args:
@@ -286,16 +290,30 @@ async def whitelist_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     try:
-        group_id = int(context.args[0])
+        # Clean the input in case they pasted with backticks or spaces
+        raw_input = "".join(context.args)
+        clean_id = raw_input.replace('`', '').replace(' ', '').strip()
+        group_id = int(clean_id)
+        
         db.add_whitelist_group(group_id)
-        await update.message.reply_text(f"✅ Group `{group_id}` has been whitelisted.", parse_mode='Markdown')
+        
+        # Verify it actually entered the database
+        if db.is_group_whitelisted(group_id):
+            await update.message.reply_text(f"✅ Group `{group_id}` has been EXPLICITLY whitelisted. The bot should now function perfectly in that group.", parse_mode='Markdown')
+        else:
+            await update.message.reply_text(f"❌ Server Error: Group `{group_id}` failed to save to the database.")
+            
     except ValueError:
-        await update.message.reply_text("❌ Invalid group ID. It must be an integer.")
+        await update.message.reply_text("❌ Invalid group ID. Please send just the numbers (e.g., -100123456789).")
 
 
 async def unwhitelist_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # SECURE ADMIN CHECK: Hardcoded owner ID to prevent spoofing
-    if str(update.effective_user.id) not in [str(config.get("admin_chat_id")), "7063439918"]:
+    user_id = str(update.effective_user.id)
+    allowed_ids = [str(config.get("admin_chat_id")).strip(), "7063439918"]
+    
+    if user_id not in allowed_ids:
+        await update.message.reply_text(f"❌ Unauthorized command. Your ID: {user_id}")
         return
 
     if not context.args:
@@ -303,11 +321,19 @@ async def unwhitelist_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     try:
-        group_id = int(context.args[0])
+        raw_input = "".join(context.args)
+        clean_id = raw_input.replace('`', '').replace(' ', '').strip()
+        group_id = int(clean_id)
+        
         db.remove_whitelist_group(group_id)
-        await update.message.reply_text(f"✅ Group `{group_id}` has been removed from the whitelist.", parse_mode='Markdown')
+        
+        if not db.is_group_whitelisted(group_id):
+            await update.message.reply_text(f"✅ Group `{group_id}` has been removed from the whitelist.", parse_mode='Markdown')
+        else:
+            await update.message.reply_text(f"❌ Server Error: Group `{group_id}` could not be deleted from the database.")
+            
     except ValueError:
-        await update.message.reply_text("❌ Invalid group ID. It must be an integer.")
+        await update.message.reply_text("❌ Invalid group ID. Please send just the numbers.")
 
 
 async def translate_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
