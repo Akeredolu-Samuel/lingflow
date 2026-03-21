@@ -91,11 +91,13 @@ def clean_language_code(lang):
     lang = lang.lower().strip()
     
     aliases = {
-        'ch': 'zh-cn',
-        'zh': 'zh-cn',
-        'cn': 'zh-cn',
-        'chinese': 'zh-cn',
-        'tw': 'zh-tw',
+        'ch': 'zh-CN',
+        'zh': 'zh-CN',
+        'cn': 'zh-CN',
+        'chinese': 'zh-CN',
+        'zh-cn': 'zh-CN',
+        'tw': 'zh-TW',
+        'zh-tw': 'zh-TW',
         'jp': 'ja',
         'kr': 'ko',
         'sp': 'es',
